@@ -103,7 +103,12 @@ make_target() {
   done
   
   if [ "$UBOOT_VERSION" = "awh3-opi2" ]; then
-    fex2bin $PKG_DIR/extra/orange_pi2.fex script.bin
+    case $DEVICE in
+      PC) FEX_NAME="orange_pi_pc.fex" ;;
+      2)  FEX_NAME="orange_pi2.fex" ;;
+      *)  FEX_NAME="orange_pi2.fex" ;;
+    esac
+    fex2bin $PKG_DIR/extra/$FEX_NAME script.bin
     update_uboot u-boot.bin script.bin u-boot-sunxi.bin
   fi
 }
