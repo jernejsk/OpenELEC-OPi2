@@ -1,6 +1,6 @@
 ################################################################################
 #      This file is part of OpenELEC - http://www.openelec.tv
-#      Copyright (C) 2009-2014 Stephan Raue (stephan@openelec.tv)
+#      Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 #
 #  OpenELEC is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -44,7 +44,7 @@ case "$LINUX" in
     PKG_URL="https://github.com/jernejsk/OpenELEC-OPi2/raw/7de19646f7a8bf77df6f2f40fff7aa978f9beb67/storage/$PKG_NAME-$PKG_VERSION.tar.xz"
     ;;
   *)
-    PKG_VERSION="4.4-rc6"
+    PKG_VERSION="4.4-rc8"
     PKG_URL="http://www.kernel.org/pub/linux/kernel/v4.x/testing/$PKG_NAME-$PKG_VERSION.tar.xz"
     ;;
 esac
