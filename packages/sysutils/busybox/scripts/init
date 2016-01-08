@@ -110,6 +110,9 @@
             ;;
         esac
         ;;
+      overlayfs=*)
+        overlayfs="${arg#*=}"
+        ;;
       wol_mac=*)
         wol_mac="${arg#*=}"
         ;;
@@ -544,6 +547,14 @@
     fi
   }
 
+  mount_overlayfs() {
+    progress "Mounting Overlayfs"
+    if [ -n "$overlayfs" ]; then
+      mkdir -p /overlayfs
+      mount_part "$overlayfs" "/overlayfs" "rw,noatime"
+     fi
+  }
+
   check_update() {
     progress "Checking for updates"
 
@@ -650,10 +661,25 @@
     progress "Preparing system"
 
     if [ "$SYSTEM_TORAM" = "no" -o "$INSTALLED_MEMORY" -lt "$SYSTEM_TORAM_LIMIT" ]; then
-      mount_part "/flash/$IMAGE_SYSTEM" "/sysroot" "ro,loop"
+      if [ -n "$overlayfs" ]; then
+         mount_part "/flash/$IMAGE_SYSTEM" "/squashfs" "ro,loop"
+       else
+         mount_part "/flash/$IMAGE_SYSTEM" "/sysroot" "ro,loop"
+       fi
     else
       cp /flash/$IMAGE_SYSTEM /dev/$IMAGE_SYSTEM
-      mount_part "/dev/$IMAGE_SYSTEM" "/sysroot" "ro,loop"
+      if [ -n "$overlayfs" ]; then
+         mount_part "/dev/$IMAGE_SYSTEM" "/squashfs" "ro,loop"
+       else
+         mount_part "/dev/$IMAGE_SYSTEM" "/sysroot" "ro,loop"
+       fi    
+    fi
+    
+    if [ -n "$overlayfs" ]; then
+      mount -t overlayfs -olowerdir=/squashfs,upperdir=/overlayfs overlayfs /sysroot
+      mkdir -p /sysroot/overlayfs /sysroot/squashfs
+      mount --move /overlayfs /sysroot/overlayfs
+      mount --move /squashfs /sysroot/squashfs
     fi
 
     mount --move /flash /sysroot/flash
@@ -685,6 +711,7 @@
       mount_flash \
       load_splash \
       mount_storage \
+      mount_overlayfs \
       check_update \
       prepare_sysroot; do
     $BOOT_STEP
