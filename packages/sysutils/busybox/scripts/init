@@ -27,6 +27,8 @@
   /bin/busybox mkdir -p /flash
   /bin/busybox mkdir -p /sysroot
   /bin/busybox mkdir -p /storage
+  /bin/busybox mkdir -p /overlayfs
+  /bin/busybox mkdir -p /squashfs
 
   # mount all needed special filesystems
   /bin/busybox mount -t devtmpfs devtmpfs /dev
