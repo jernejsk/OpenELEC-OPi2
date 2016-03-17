@@ -227,26 +227,12 @@ fi
     rm -rf $TARGET_IMG/$IMAGE_NAME.kernel
 
 # copy kernel to target dir
-  if [ "$BOOTLOADER" = "u-boot" ]; then
-    KERNEL_IMAGE="$KERNEL_UBOOT_TARGET"
-  elif [ "$BOOTLOADER" = "bcm2835-bootloader" ]; then
-    KERNEL_IMAGE="zImage"
-  else
-    KERNEL_IMAGE="bzImage"
-  fi
-
-  if [ "$TARGET_ARCH" = x86_64 ]; then
-    KERNEL_ARCH="x86"
-  elif [ "$TARGET_ARCH" = arm ]; then
-    KERNEL_ARCH="arm"
-  fi
-
   if [ "$BOOTLOADER" = "bcm2835-bootloader" ]; then
     echo "injecting DeviceTreeBlobs to kernel..."
-    perl $BUILD/linux-$(kernel_version)/scripts/mkknlimg $BUILD/linux-$(kernel_version)/arch/$KERNEL_ARCH/boot/$KERNEL_IMAGE $TARGET_IMG/$IMAGE_NAME.kernel
+    perl $BUILD/linux-$(kernel_version)/scripts/mkknlimg $BUILD/linux-$(kernel_version)/arch/$TARGET_KERNEL_ARCH/boot/$KERNEL_TARGET $TARGET_IMG/$IMAGE_NAME.kernel
     echo "...done"
   else
-    cp -PR $BUILD/linux-$(kernel_version)/arch/$KERNEL_ARCH/boot/$KERNEL_IMAGE $TARGET_IMG/$IMAGE_NAME.kernel
+    cp -PR $BUILD/linux-$(kernel_version)/arch/$TARGET_KERNEL_ARCH/boot/$KERNEL_TARGET $TARGET_IMG/$IMAGE_NAME.kernel
   fi
   chmod 0644 $TARGET_IMG/$IMAGE_NAME.kernel
 
@@ -277,21 +263,34 @@ fi
       # remove n previous created release image
         rm -rf $TARGET_IMG/$IMAGE_NAME.img.gz
         if [ -n "$BOOTLOADER" ]; then
-          if [ -d $ROOT/projects/$PROJECT/packages ]; then
-          	BOOTLOADER_DIR=`find $ROOT/projects/$PROJECT/packages -type d -name $BOOTLOADER 2>/dev/null`
-          else
-          	BOOTLOADER_DIR=""
+
+          BOOTLOADER_DIR=""
+
+          if [ -z "$BOOTLOADER_DIR" -a -d $HOME/.openelec/projects/$PROJECT/packages ]; then
+            BOOTLOADER_DIR=`find $HOME/.openelec/projects/$PROJECT/packages -type d -name $BOOTLOADER 2>/dev/null`
+          fi
+
+          if [ -z "$BOOTLOADER_DIR" -a -d $HOME/.openelec/packages ]; then
+            BOOTLOADER_DIR=`find $HOME/.openelec/packages -type d -name $BOOTLOADER 2>/dev/null`
+          fi
+
+          if [ -z "$BOOTLOADER_DIR" -a -d $PROJECT_DIR/$PROJECT/packages ]; then
+            BOOTLOADER_DIR=`find $PROJECT_DIR/$PROJECT/packages -type d -name $BOOTLOADER 2>/dev/null`
           fi
 
           if [ -z "$BOOTLOADER_DIR" -o ! -d "$BOOTLOADER_DIR" ]; then
-          	BOOTLOADER_DIR=`find $PACKAGES -type d -name $BOOTLOADER 2>/dev/null`
+            BOOTLOADER_DIR=`find $PACKAGES -type d -name $BOOTLOADER 2>/dev/null`
           fi
 
           if [ -d "$BOOTLOADER_DIR"/files ]; then
             cp -R $BOOTLOADER_DIR/files/* $RELEASE_DIR
           fi
 
-          if [ -f $PROJECT_DIR/$PROJECT/bootloader/release ]; then
+          if [ -f $HOME/.openelec/projects/$PROJECT/bootloader/release ]; then
+            . $HOME/.openelec/projects/$PROJECT/bootloader/release
+          elif [ -f $HOME/.openelec/bootloader/release ]; then
+            . $HOME/.openelec/bootloader/release
+          elif [ -f $PROJECT_DIR/$PROJECT/bootloader/release ]; then
             . $PROJECT_DIR/$PROJECT/bootloader/release
           elif [ -f "$BOOTLOADER_DIR"/release ]; then
             . $BOOTLOADER_DIR/release
@@ -456,6 +455,7 @@ fi
           -e "s%@KERNEL_VERSION@%$(kernel_version)%g" \
           -e "s%@DESCRIPTION@%$DESCRIPTION%g" \
           -e "s%@ROOT_PASSWORD@%$ROOT_PASSWORD%g" \
+          -e "s%@NOOBS_SUPPORTED_MODELS@%$NOOBS_SUPPORTED_MODELS%g" \
           -e "s%@NOOBS_HEX@%$NOOBS_HEX%g" \
           -i $RELEASE_DIR/${DISTRONAME}_${PROJECT}/os.json
 

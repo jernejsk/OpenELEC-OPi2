@@ -48,8 +48,8 @@
   # Target Configfile for u-boot
     UBOOT_CONFIGFILE=""
 
-  # Kernel target for u-boot (default 'uImage' if BOOTLOADER=u-boot) (uImage / zImage)
-    KERNEL_UBOOT_TARGET="zImage"
+  # Kernel target
+    KERNEL_TARGET="zImage"
 
   # Kernel extra targets to build
     KERNEL_UBOOT_EXTRA_TARGET="imx6q-cubox-i.dtb imx6dl-cubox-i.dtb"
@@ -122,7 +122,7 @@
   # for a list of additinoal drivers see packages/linux-drivers
   # Space separated list is supported,
   # e.g. ADDITIONAL_DRIVERS="DRIVER1 DRIVER2"
-    ADDITIONAL_DRIVERS="RTL8192CU RTL8192DU RTL8188EU RTL8812AU dvbhdhomerun"
+    ADDITIONAL_DRIVERS="RTL8192CU RTL8192DU RTL8188EU dvbhdhomerun"
 
   # additional Firmware to use (dvb-firmware, misc-firmware, wlan-firmware)
   # Space separated list is supported,

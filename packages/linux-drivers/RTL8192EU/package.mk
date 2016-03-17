@@ -17,12 +17,13 @@
 ################################################################################
 
 PKG_NAME="RTL8192EU"
-PKG_VERSION="6793bae"
+PKG_VERSION="a322c84"
 PKG_REV="1"
 PKG_ARCH="any"
 PKG_LICENSE="GPL"
 PKG_SITE="https://github.com/Mange/rtl8192eu-linux-driver"
-PKG_URL="$DISTRO_SRC/$PKG_NAME-$PKG_VERSION.tar.xz"
+PKG_GIT_URL="https://github.com/Mange/rtl8192eu-linux-driver.git"
+PKG_GIT_BRANCH="master"
 PKG_DEPENDS_TARGET="toolchain linux"
 PKG_NEED_UNPACK="$LINUX_DEPENDS"
 PKG_PRIORITY="optional"
@@ -39,7 +40,7 @@ pre_make_target() {
 
 make_target() {
   make V=1 \
-       ARCH=$TARGET_ARCH \
+       ARCH=$TARGET_KERNEL_ARCH \
        KSRC=$(kernel_path) \
        CROSS_COMPILE=$TARGET_PREFIX \
        CONFIG_POWER_SAVING=n \
