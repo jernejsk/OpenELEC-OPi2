@@ -1,6 +1,6 @@
 diff -Nur a/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp b/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp
 --- a/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp	2016-02-22 21:23:27.000000000 +0100
-+++ b/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp	2016-03-01 23:28:10.577172399 +0100
++++ b/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp	2016-03-17 23:27:12.189483934 +0100
 @@ -100,6 +100,9 @@
  {
    m_context = 0;
@@ -133,7 +133,56 @@ diff -Nur a/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp b/xbmc/cores/dvdplaye
  
    if(avctx->coded_width  == 0
    || avctx->coded_height == 0)
-@@ -1077,6 +1131,25 @@
+@@ -530,7 +584,7 @@
+ 
+     // convert FFMPEG codec ID to VDPAU profile.
+     ReadFormatOf(avctx->codec_id, profile, m_vdpauConfig.vdpChromaType);
+-    if(profile)
++    if(profile != 0xffffffffUL)
+     {
+       VdpStatus vdp_st;
+       VdpBool is_supported = false;
+@@ -580,7 +634,9 @@
+       mainctx->slice_flags = SLICE_FLAG_CODED_ORDER|SLICE_FLAG_ALLOW_FIELD;
+       mainctx->hwaccel_context = &m_hwContext;
+ 
++#if HAS_GL
+       g_Windowing.Register(this);
++#endif
+       return true;
+     }
+   }
+@@ -596,7 +652,9 @@
+ {
+   CLog::Log(LOGNOTICE, " (VDPAU) %s", __FUNCTION__);
+ 
++#if HAS_GL
+   g_Windowing.Unregister(this);
++#endif
+ 
+   CSingleLock lock(m_DecoderSection);
+ 
+@@ -652,7 +710,7 @@
+ 
+ void CDecoder::SetWidthHeight(int width, int height)
+ {
+-  m_vdpauConfig.upscale = g_advancedSettings.m_videoVDPAUScaling;
++  m_vdpauConfig.upscale = 0; //g_advancedSettings.m_videoVDPAUScaling;
+ 
+   //pick the smallest dimensions, so we downscale with vdpau and upscale with opengl when appropriate
+   //this requires the least amount of gpu memory bandwidth
+@@ -866,8 +924,8 @@
+       vdp_chroma_type     = VDP_CHROMA_TYPE_420;
+       break;
+     default:
+-      vdp_decoder_profile = 0;
+-      vdp_chroma_type     = 0;
++      vdp_decoder_profile = 0xffffffffUL;
++      vdp_chroma_type     = 0xffffffffUL;
+       break;
+   }
+ }
+@@ -1077,6 +1135,25 @@
    return 0;
  }
  
@@ -159,7 +208,46 @@ diff -Nur a/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp b/xbmc/cores/dvdplaye
  
  int CDecoder::Decode(AVCodecContext *avctx, AVFrame *pFrame)
  {
-@@ -3581,6 +3654,7 @@
+@@ -1268,8 +1345,8 @@
+         m_DisplayEvent.Reset();
+         m_DisplayState = VDPAU_LOST;
+       }
+-      else if (m_ErrorCount > 2)
+-        m_DisplayState = VDPAU_ERROR;
++      //else if (m_ErrorCount > 2)
++      //  m_DisplayState = VDPAU_ERROR;
+     }
+ 
+     return true;
+@@ -2522,11 +2599,25 @@
+   sourceRect.y1 = m_config.vidHeight;
+ 
+   VdpRect destRect;
+-  destRect.x0 = 0;
+-  destRect.y0 = 0;
++  destRect.x0 = (g_graphicsContext.GetWidth() - m_config.outWidth) / 2;
++  destRect.y0 = (g_graphicsContext.GetHeight() - m_config.outHeight) / 2;
+   destRect.x1 = m_config.outWidth;
+   destRect.y1 = m_config.outHeight;
+ 
++  if(m_videoMixer == VDP_INVALID_HANDLE)
++    CLog::Log(LOGDEBUG, " (VDPAU) : %s(%d) m_videoMixer is invalid\n", __FUNCTION__, __LINE__);
++  if(m_processPicture.outputSurface == VDP_INVALID_HANDLE)
++    CLog::Log(LOGDEBUG, " (VDPAU) : %s(%d) outputSurface is invalid\n", __FUNCTION__, __LINE__);
++  if(m_mixerInput[1].videoSurface == VDP_INVALID_HANDLE)
++    CLog::Log(LOGDEBUG, " (VDPAU) : %s(%d) video_surface_current is invalid\n", __FUNCTION__, __LINE__);
++  
++#if !GL_NV_vdpau_interop
++  VdpTime time;
++  vdp_st = m_config.context->GetProcs().vdp_presentation_queue_block_until_surface_idle(
++                                          m_config.context->m_vdpFlipQueue,
++                                     m_processPicture.outputSurface,&time);
++#endif
++
+   // start vdpau video mixer
+   vdp_st = m_config.context->GetProcs().vdp_video_mixer_render(m_videoMixer,
+                                 VDP_INVALID_HANDLE,
+@@ -3581,6 +3672,7 @@
  
  bool COutput::CreateGlxContext()
  {
@@ -167,7 +255,7 @@ diff -Nur a/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp b/xbmc/cores/dvdplaye
    GLXContext   glContext;
  
    m_Display = g_Windowing.GetDisplay();
-@@ -3631,6 +3705,7 @@
+@@ -3631,6 +3723,7 @@
      CLog::Log(LOGINFO, "VDPAU::COutput::CreateGlxContext - Could not make Pixmap current");
      return false;
    }
@@ -175,7 +263,7 @@ diff -Nur a/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp b/xbmc/cores/dvdplaye
  
    CLog::Log(LOGNOTICE, "VDPAU::COutput::CreateGlxContext - created context");
    return true;
-@@ -3638,6 +3713,7 @@
+@@ -3638,6 +3731,7 @@
  
  bool COutput::DestroyGlxContext()
  {
@@ -183,7 +271,7 @@ diff -Nur a/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.cpp b/xbmc/cores/dvdplaye
    if (m_glContext)
    {
      glXMakeCurrent(m_Display, None, NULL);
-@@ -3652,6 +3728,7 @@
+@@ -3652,6 +3746,7 @@
    if (m_pixmap)
      XFreePixmap(m_Display, m_pixmap);
    m_pixmap = 0;
@@ -300,7 +388,7 @@ diff -Nur a/xbmc/cores/dvdplayer/DVDCodecs/Video/VDPAU.h b/xbmc/cores/dvdplayer/
    bool Supports(EINTERLACEMETHOD method);
 diff -Nur a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp
 --- a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp	2016-02-22 21:23:27.000000000 +0100
-+++ b/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp	2016-03-01 23:24:03.641228376 +0100
++++ b/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp	2016-03-17 22:00:19.546450833 +0100
 @@ -116,6 +116,9 @@
  #ifdef HAS_IMXVPU
    IMXBuffer = NULL;
@@ -409,7 +497,7 @@ diff -Nur a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoRe
  }
  
  void CLinuxRendererGLES::Render(DWORD flags, int index)
-@@ -2890,6 +2954,27 @@
+@@ -2890,6 +2954,30 @@
    return true;
  }
  
@@ -418,10 +506,12 @@ diff -Nur a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoRe
 +//********************************************************************************************************
 +void CLinuxRendererGLES::UploadVDPAUTexture(int index)
 +{
++  CLog::Log(LOGDEBUG, " (VDPAU) : %s(%d) index = %d\n", __FUNCTION__, __LINE__, index);
 +}
 +
 +void CLinuxRendererGLES::DeleteVDPAUTexture(int index)
 +{
++  CLog::Log(LOGDEBUG, " (VDPAU) : %s(%d) index = %d\n", __FUNCTION__, __LINE__, index);
 +#ifdef HAVE_LIBVDPAU
 +  SAFE_RELEASE(m_buffers[index].vdpau);
 +#endif
@@ -429,6 +519,7 @@ diff -Nur a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoRe
 +
 +bool CLinuxRendererGLES::CreateVDPAUTexture(int index)
 +{
++  CLog::Log(LOGDEBUG, " (VDPAU) : %s(%d) index = %d\n", __FUNCTION__, __LINE__, index);
 +#ifdef HAVE_LIBVDPAU
 +  m_buffers[index].vdpau = 0;
 +#endif
@@ -437,7 +528,7 @@ diff -Nur a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoRe
  
  bool CLinuxRendererGLES::Supports(ERENDERFEATURE feature)
  {
-@@ -3008,6 +3093,16 @@
+@@ -3008,6 +3096,16 @@
      else
        return false;
    }
@@ -454,7 +545,7 @@ diff -Nur a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoRe
  
  #if !defined(TARGET_ANDROID) && (defined(__i386__) || defined(__x86_64__))
    if(method == VS_INTERLACEMETHOD_DEINTERLACE
-@@ -3073,6 +3168,9 @@
+@@ -3073,6 +3171,9 @@
  
    if(m_renderMethod & RENDER_IMXMAP)
      return VS_INTERLACEMETHOD_IMX_FASTMOTION;
@@ -464,7 +555,7 @@ diff -Nur a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoRe
  
  #if !defined(TARGET_ANDROID) && (defined(__i386__) || defined(__x86_64__))
    return VS_INTERLACEMETHOD_DEINTERLACE_HALF;
-@@ -3090,7 +3188,8 @@
+@@ -3090,7 +3191,8 @@
       m_format == RENDER_FMT_CVBREF ||
       m_format == RENDER_FMT_EGLIMG ||
       m_format == RENDER_FMT_MEDIACODEC ||
@@ -474,7 +565,7 @@ diff -Nur a/xbmc/cores/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoRe
      info.optimal_buffer_size = 2;
    else if(m_format == RENDER_FMT_IMXMAP)
    {
-@@ -3187,9 +3286,20 @@
+@@ -3187,9 +3289,20 @@
  }
  #endif
  
