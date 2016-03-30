@@ -1,0 +1,11 @@
+diff -Nur a/libsanitizer/sanitizer_common/sanitizer_platform_limits_linux.cc b/libsanitizer/sanitizer_common/sanitizer_platform_limits_linux.cc
+--- a/libsanitizer/sanitizer_common/sanitizer_platform_limits_linux.cc	2015-03-09 19:25:28.000000000 +0100
++++ b/libsanitizer/sanitizer_common/sanitizer_platform_limits_linux.cc	2016-03-29 22:04:51.588166207 +0200
+@@ -47,6 +47,7 @@
+ #undef off_t
+ #endif
+ 
++#include <sys/cdefs.h>
+ #include <linux/aio_abi.h>
+ 
+ #if !SANITIZER_ANDROID

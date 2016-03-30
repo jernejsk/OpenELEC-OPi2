@@ -40,6 +40,11 @@ case "$LINUX" in
     PKG_GIT_BRANCH="3.14-1.0.x-mx6-sr"
     PKG_DEPENDS_TARGET="$PKG_DEPENDS_TARGET imx6-status-led imx6-soc-fan"
     ;;
+  awh3)
+    PKG_VERSION="93a96dc"
+    PKG_GIT_URL="https://git.kernel.org/pub/scm/linux/kernel/git/mripard/linux.git"
+    PKG_GIT_BRANCH="sunxi/for-next"
+    ;;
   *)
     PKG_VERSION="4.5"
     PKG_URL="http://www.kernel.org/pub/linux/kernel/v4.x/$PKG_NAME-$PKG_VERSION.tar.xz"
