@@ -1,0 +1,57 @@
+From 28150076d6d1342e50884bea70f0fce685d2a706 Mon Sep 17 00:00:00 2001
+From: LABBE Corentin <clabbe.montjoie@gmail.com>
+Date: Thu, 25 Feb 2016 14:43:41 +0100
+Subject: [PATCH] ARM: dts: sun8i-h3: add sun8i-emac ethernet driver
+
+The sun8i-emac is an ethernet MAC hardware that support 10/100/1000
+speed.
+
+This patch enable the sun8i-emac on the Allwinner H3 SoC Device-tree.
+
+Signed-off-by: LABBE Corentin <clabbe.montjoie@gmail.com>
+---
+ arch/arm/boot/dts/sun8i-h3.dtsi | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/arch/arm/boot/dts/sun8i-h3.dtsi b/arch/arm/boot/dts/sun8i-h3.dtsi
+index dadb7f6..a13d2e6 100644
+--- a/arch/arm/boot/dts/sun8i-h3.dtsi
++++ b/arch/arm/boot/dts/sun8i-h3.dtsi
+@@ -388,6 +388,17 @@
+ 			interrupt-controller;
+ 			#interrupt-cells = <3>;
+ 
++			emac_rgmii_pins: emac0@0 {
++				allwinner,pins = "PD0", "PD1", "PD2", "PD3",
++						"PD4", "PD5", "PD6", "PD7",
++						"PD8", "PD9", "PD10", "PD11",
++						"PD12", "PD13", "PD14", "PD15",
++						"PD16", "PD17";
++				allwinner,function = "emac";
++				allwinner,drive = <SUN4I_PINCTRL_40_MA>;
++				allwinner,pull = <SUN4I_PINCTRL_NO_PULL>;
++			};
++
+ 			uart0_pins_a: uart0@0 {
+ 				allwinner,pins = "PA4", "PA5";
+ 				allwinner,function = "uart0";
+@@ -503,6 +514,19 @@
+ 			status = "disabled";
+ 		};
+ 
++		emac: ethernet@1c30000 {
++			compatible = "allwinner,sun8i-h3-emac";
++			reg = <0x01c30000 0x1054>;
++			interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
++			resets = <&ahb_rst 17>, <&ahb_rst 66>;
++			reset-names = "ahb", "ephy";
++			clocks = <&bus_gates 17>, <&bus_gates 128>;
++			clock-names = "bus_gmac", "bus_ephy";
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "disabled";
++		};
++
+ 		gic: interrupt-controller@01c81000 {
+ 			compatible = "arm,cortex-a7-gic", "arm,cortex-a15-gic";
+ 			reg = <0x01c81000 0x1000>,

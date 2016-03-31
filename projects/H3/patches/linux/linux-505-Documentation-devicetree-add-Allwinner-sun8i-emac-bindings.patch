@@ -1,0 +1,41 @@
+From e2a8de9cc09bb0a7545c3b57980861f9f0a75482 Mon Sep 17 00:00:00 2001
+From: LABBE Corentin <clabbe.montjoie@gmail.com>
+Date: Tue, 1 Mar 2016 15:00:43 +0100
+Subject: [PATCH] Documentation: devicetree: add Allwinner sun8i-emac bindings
+
+Add documentation for the Allwinner sun8i-emac.
+
+Signed-off-by: LABBE Corentin <clabbe.montjoie@gmail.com>
+---
+ .../bindings/net/allwinner,sun8i-emac.txt          | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/net/allwinner,sun8i-emac.txt
+
+diff --git a/Documentation/devicetree/bindings/net/allwinner,sun8i-emac.txt b/Documentation/devicetree/bindings/net/allwinner,sun8i-emac.txt
+new file mode 100644
+index 0000000..5ada7d9
+--- /dev/null
++++ b/Documentation/devicetree/bindings/net/allwinner,sun8i-emac.txt
+@@ -0,0 +1,22 @@
++* Allwinner sun8i EMAC ethernet controller
++
++Required properties:
++- compatible: should be "allwinner,sun8i-h3-emac"
++- reg: address and length of the register set for the device.
++- interrupts: interrupt for the device
++- phy: see ethernet.txt file in the same directory.
++- clocks: A phandle to the reference clock for this device
++- resets: TODO
++- reset-names: should be "ahb";
++
++Example:
++
++emac: ethernet@01c0b000 {
++       compatible = "allwinner,sun8i-h3-emac";
++       reg = <0x01c0b000 0x1000>;
++       interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
++       resets = <&ahb_rst 17>;
++       reset-names = "ahb";
++       clocks = <&bus_gates 17>;
++       phy = <&phy0>;
++};
