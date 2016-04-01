@@ -1,3 +1,38 @@
+**This is unofficial fork which won't work for quiet some time**
+
+This code is based on (soon to be) mainlined H3 kernel & u-boot sources and it is WIP.
+
+*Working*
+- USB
+- Integrated WIFI on OPi2 and OPiPlus
+- Ethernet on OPi2 & OPiPC (driver is WIP, so it might be unstable)
+- LEDs
+ 
+*Should work, but not tested*
+- IR
+- eMMC on OPiPlus
+- GPIOs
+- SATA on OPiPlus
+
+*Not implemented/fixed yet*
+- Thermal CPU throttling
+- Any kind of graphics
+- All sound outputs
+- HW video decoding acceleration
+- Ethernet on OPiPlus
+- Kodi
+
+Images can be build with this command:
+```
+PROJECT=H3 ARCH=arm SYSTEM=xxx make image
+```
+where xxx can be one of the following devices:
+- opi2
+- opipc
+- opiplus
+
+There are no precompiled images.
+
 [OpenELEC](http://www.openelec.tv)
 
 # OpenELEC - Open Embedded Linux Entertainment Center
