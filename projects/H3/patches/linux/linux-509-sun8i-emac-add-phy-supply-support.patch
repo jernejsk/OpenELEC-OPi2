@@ -1,0 +1,42 @@
+diff -Nur a/drivers/net/ethernet/allwinner/sun8i-emac.c b/drivers/net/ethernet/allwinner/sun8i-emac.c
+--- a/drivers/net/ethernet/allwinner/sun8i-emac.c	2016-04-04 21:31:01.000000000 +0200
++++ b/drivers/net/ethernet/allwinner/sun8i-emac.c	2016-04-04 22:38:09.818701175 +0200
+@@ -120,6 +120,7 @@
+ 	struct clk *ahb_clk;
+ 	struct clk *tx_clk;
+ 	u32 mdc;
++	struct regulator *regulator;
+ 
+ 	struct reset_control *rst_phy;
+ 	struct reset_control *rst;
+@@ -680,6 +681,20 @@
+ 		return ret;
+ 	}
+ 
++	priv->regulator = devm_regulator_get_optional(priv->dev, "phy");
++	if (IS_ERR(priv->regulator)) {
++		if (PTR_ERR(priv->regulator) == -EPROBE_DEFER)
++			return -EPROBE_DEFER;
++		dev_info(priv->dev, "no regulator found\n");
++		priv->regulator = NULL;
++	}
++
++	if (priv->regulator) {
++		ret = regulator_enable(priv->regulator);
++		if (ret)
++			return ret;
++	}
++
+ 	if (priv->rst) {
+ 		ret = reset_control_deassert(priv->rst);
+ 		if (ret) {
+@@ -724,6 +739,9 @@
+ 		reset_control_assert(priv->rst);
+ 
+ 	clk_disable_unprepare(priv->ahb_clk);
++
++	if (priv->regulator)
++		regulator_disable(priv->regulator);
+ }
+ 
+ /* this function do lots of things that will be splited away (clk/phy) */

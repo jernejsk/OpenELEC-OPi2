@@ -34,20 +34,54 @@ diff -Nur a/arch/arm/boot/dts/sun8i-h3-orangepi-pc.dts b/arch/arm/boot/dts/sun8i
 \ Brez nove vrstice ob koncu datoteke
 diff -Nur a/arch/arm/boot/dts/sun8i-h3-orangepi-plus.dts b/arch/arm/boot/dts/sun8i-h3-orangepi-plus.dts
 --- a/arch/arm/boot/dts/sun8i-h3-orangepi-plus.dts	2016-03-27 16:16:52.000000000 +0200
-+++ b/arch/arm/boot/dts/sun8i-h3-orangepi-plus.dts	2016-03-31 23:49:50.104870880 +0200
-@@ -93,3 +93,14 @@
++++ b/arch/arm/boot/dts/sun8i-h3-orangepi-plus.dts	2016-04-04 21:29:31.684790172 +0200
+@@ -47,6 +47,18 @@
+ 	model = "Xunlong Orange Pi Plus";
+ 	compatible = "xunlong,orangepi-plus", "allwinner,sun8i-h3";
+ 
++	reg_gmac_3v3: gmac-3v3 {
++		compatible = "regulator-fixed";
++		pinctrl-names = "default";
++		pinctrl-0 = <&gmac_power_pin_orangepi>;
++		regulator-name = "gmac-3v3";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		startup-delay-us = <100000>;
++		enable-active-high;
++		gpio = <&pio 3 6 GPIO_ACTIVE_HIGH>;
++	};
++
+ 	reg_usb3_vbus: usb3-vbus {
+ 		compatible = "regulator-fixed";
+ 		pinctrl-names = "default";
+@@ -82,6 +94,13 @@
+ };
+ 
+ &pio {
++	gmac_power_pin_orangepi: gmac_power_pin@0 {
++		allwinner,pins = "PD6";
++		allwinner,function = "gpio_out";
++		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
++		allwinner,pull = <SUN4I_PINCTRL_NO_PULL>;
++	};
++
+ 	usb3_vbus_pin_a: usb3_vbus_pin@0 {
+ 		allwinner,pins = "PG11";
+ 		allwinner,function = "gpio_out";
+@@ -93,3 +112,15 @@
  &usbphy {
  	usb3_vbus-supply = <&reg_usb3_vbus>;
  };
 +
 +&emac {
-+        pinctrl-names = "default";
-+        pinctrl-0 = <&emac_rgmii_pins>;
-+        phy = <&phy1>;
-+        phy-mode = "rgmii";
-+        status = "okay";
-+        phy1: ethernet-phy@1 {
-+                  reg = <0>;
-+        };
++	pinctrl-names = "default";
++	pinctrl-0 = <&emac_rgmii_pins>;
++	phy = <&phy1>;
++	phy-mode = "rgmii";
++	phy-supply = <&reg_gmac_3v3>;
++	status = "okay";
++	phy1: ethernet-phy@1 {
++		reg = <0>;
++	};
 +};
 \ Brez nove vrstice ob koncu datoteke

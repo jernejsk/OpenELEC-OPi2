@@ -1,4 +1,4 @@
-From 95ec1002a4c212306598c4e141f52c1a830576df Mon Sep 17 00:00:00 2001
+From 7c64bf9a866a52b398b017f18ddb7e77ced3c621 Mon Sep 17 00:00:00 2001
 From: LABBE Corentin <clabbe.montjoie@gmail.com>
 Date: Thu, 14 Jan 2016 11:40:23 +0100
 Subject: [PATCH] ethernet: add sun8i-emac driver
@@ -10,8 +10,8 @@ Signed-off-by: LABBE Corentin <clabbe.montjoie@gmail.com>
 ---
  drivers/net/ethernet/allwinner/Kconfig      |   13 +
  drivers/net/ethernet/allwinner/Makefile     |    1 +
- drivers/net/ethernet/allwinner/sun8i-emac.c | 1588 +++++++++++++++++++++++++++
- 3 files changed, 1602 insertions(+)
+ drivers/net/ethernet/allwinner/sun8i-emac.c | 1679 +++++++++++++++++++++++++++
+ 3 files changed, 1693 insertions(+)
  create mode 100644 drivers/net/ethernet/allwinner/sun8i-emac.c
 
 diff --git a/drivers/net/ethernet/allwinner/Kconfig b/drivers/net/ethernet/allwinner/Kconfig
@@ -47,10 +47,10 @@ index 03129f7..8bd1693c 100644
 +obj-$(CONFIG_SUN8I_EMAC) += sun8i-emac.o
 diff --git a/drivers/net/ethernet/allwinner/sun8i-emac.c b/drivers/net/ethernet/allwinner/sun8i-emac.c
 new file mode 100644
-index 0000000..7db3afd
+index 0000000..8ca674e3
 --- /dev/null
 +++ b/drivers/net/ethernet/allwinner/sun8i-emac.c
-@@ -0,0 +1,1588 @@
+@@ -0,0 +1,1679 @@
 +/*
 + * sun8i-h3-emac driver
 + *
@@ -65,8 +65,8 @@ index 0000000..7db3afd
 + *
 + * TODO:
 + * - NAPI
-+ * - conditionnal CRC (useful ?)
-+ * - conditionnal SG handling (useful ?)
++ * - conditional CRC (useful ?)
++ * - conditional SG handling (useful ?)
 + * - MAC filtering
 + * - Jumbo frame
 + */
@@ -135,10 +135,16 @@ index 0000000..7db3afd
 +
 +#define SUN8I_COULD_BE_USED_BY_DMA BIT(31)
 +
-+/* */
-+#define DESC_BUF_MAX 2047
++/* The datasheet said that each descriptor can transfers up to 4096bytes
++ * But latter, a register documentation reduce that value to 2048
++ * Anyway using 2048 cause strange behaviours and even BSP driver use 2047
++ */
++#define DESC_BUF_MAX 2000
 +
-+/* TODO desc */
++/* MAGIC value for knowing if a descriptor is available or not */
++#define DCLEAN (BIT(16) | BIT(14) | BIT(12) | BIT(10) | BIT(9))
++
++/* Structure of DMA descriptor used by the hardware  */
 +struct dma_desc {
 +	u32 status; /* status of the descriptor */
 +	u32 st; /* Information on the frame */
@@ -146,6 +152,7 @@ index 0000000..7db3afd
 +	u32 next; /* physical address of next dma_desc */
 +} __packed __aligned(4);
 +
++/* TODO flow_ctrl */
 +static int flow_ctrl;
 +static int pause = 0x400;
 +
@@ -170,10 +177,10 @@ index 0000000..7db3afd
 +	struct reset_control *rst_phy;
 +	struct reset_control *rst;
 +
-+	struct dma_desc *dd_rx ____cacheline_aligned;
-+	dma_addr_t dd_rx_phy ____cacheline_aligned;
-+	struct dma_desc *dd_tx;
-+	dma_addr_t dd_tx_phy;
++	struct dma_desc *dd_rx __aligned(4);
++	dma_addr_t dd_rx_phy __aligned(4);
++	struct dma_desc *dd_tx __aligned(4);
++	dma_addr_t dd_tx_phy __aligned(4);
 +	struct sk_buff **rx_sk;
 +	struct sk_buff **tx_sk;
 +	int *tx_map;
@@ -181,6 +188,7 @@ index 0000000..7db3afd
 +	int tx_slot;
 +	int tx_dirty;
 +	int tx_dma_start;
++	int rx_dirty;
 +};
 +
 +/* TODO use % */
@@ -191,7 +199,7 @@ index 0000000..7db3afd
 +		*p = 0;
 +}
 +
-+/* return the number of contigous free descriptors
++/* return the number of contiguous free descriptors
 + * starting from tx_slot
 + */
 +int rb_tx_numfreedesc(struct net_device *ndev)
@@ -206,7 +214,7 @@ index 0000000..7db3afd
 +
 +static int sun8i_ephy_hack(struct net_device *ndev);
 +
-+/* allocate a sk in a dma descriptor
++/* allocate a skb in a DMA descriptor
 + *
 + * @i index of slot to fill
 +*/
@@ -220,13 +228,12 @@ index 0000000..7db3afd
 +
 +	ddesc->st = 0;
 +
-+	/* TODO need to recheck this value */
 +	sk = netdev_alloc_skb_ip_align(ndev, DESC_BUF_MAX);
 +	if (!sk)
 +		return -ENOMEM;
 +
 +	if (priv->rx_sk[i]) {
-+		dev_warn(priv->dev, "WARN: Leaking a skbuff\n");
++		dev_warn(priv->dev, "BUG: Leaking a skbuff\n");
 +		/* TODO should not happen */
 +	}
 +
@@ -256,7 +263,7 @@ index 0000000..7db3afd
 +		addr = priv->ndev->dev_addr;
 +	}
 +	dev_info(priv->dev, "device MAC address slot %d %02x:%02x:%02x:%02x:%02x:%02x\n",
-+		 index, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]),
++		 index, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
 +
 +	v = (addr[5] << 8) | addr[4];
 +	writel(v, priv->base + SUN8I_EMAC_MACADDR_HI + index * 8);
@@ -291,6 +298,7 @@ index 0000000..7db3afd
 +	writel(v, priv->base + SUN8I_EMAC_BASIC_CTL0);
 +}
 +
++/* TODO */
 +static void sun8i_emac_flow_ctrl(struct sun8i_emac_priv *priv, int duplex,
 +				 int fc, int pause)
 +{
@@ -300,8 +308,7 @@ index 0000000..7db3afd
 +
 +	if (fc & BIT(0)) {
 +		flow = readl(priv->base + SUN8I_EMAC_RX_CTL0);
-+		flow |= 0x10000;
-+		/*flow |= BIT(16);*/
++		flow |= BIT(16);
 +		writel(flow, priv->base + SUN8I_EMAC_RX_CTL0);
 +	}
 +
@@ -329,15 +336,58 @@ index 0000000..7db3afd
 +
 +	ddesc = priv->dd_rx + i;
 +
-+	/* possible erros */
++	/* possible errors */
++	/* TODO errors bit seems randomly set. Ignoring them for now */
++	/* the checksum or length of received frame's payload is wrong*/
 +	if ((ddesc->status & BIT(0)) > 0) {
-+		/* the checksum or length of received frame's payload is wrong*/
-+		/* TODO its the case for ARP */
 +		priv->ndev->stats.rx_errors++;
++		/* ddesc->status = BIT(31);
++		 * ddesc->st = DESC_BUF_MAX;
++		 * return 0;*/
 +	}
-+	if ((ddesc->status & BIT(7)) > 0) {
-+		/*dev_warn(priv->dev, "RX_HEADER_ERR\n");*/
++	if ((ddesc->status & BIT(1)) > 0) {
 +		priv->ndev->stats.rx_errors++;
++		priv->ndev->stats.rx_crc_errors++;
++		/* ddesc->status = BIT(31);
++		 * ddesc->st = DESC_BUF_MAX;
++		 * return 0;*/
++	}
++	if ((ddesc->status & BIT(3))) {
++		priv->ndev->stats.rx_errors++;
++		/* ddesc->status = BIT(31);
++		 * ddesc->st = DESC_BUF_MAX;
++		 * return 0;*/
++	}
++	if ((ddesc->status & BIT(4))) {
++		priv->ndev->stats.rx_errors++;
++		priv->ndev->stats.rx_length_errors++;
++		/* ddesc->status = BIT(31);
++		 * ddesc->st = DESC_BUF_MAX;
++		 * return 0;*/
++	}
++	if ((ddesc->status & BIT(6))) {
++		priv->ndev->stats.rx_errors++;
++		/* ddesc->status = BIT(31);
++		 * ddesc->st = DESC_BUF_MAX;
++		 * return 0;*/
++	}
++	if ((ddesc->status & BIT(7))) {
++		priv->ndev->stats.rx_errors++;
++		/* ddesc->status = BIT(31);
++		 * ddesc->st = DESC_BUF_MAX;
++		 * return 0;*/
++	}
++	if ((ddesc->status & BIT(11))) {
++		priv->ndev->stats.rx_over_errors++;
++		/* ddesc->status = BIT(31);
++		 * ddesc->st = DESC_BUF_MAX;
++		 * return 0;*/
++	}
++	if ((ddesc->status & BIT(14))) {
++		priv->ndev->stats.rx_errors++;
++		/* ddesc->status = BIT(31);
++		 * ddesc->st = DESC_BUF_MAX;
++		 * return 0;*/
 +	}
 +
 +	if ((ddesc->status & BIT(9)) == 0) {
@@ -363,7 +413,7 @@ index 0000000..7db3afd
 +	priv->rx_sk[i] = NULL;
 +
 +	/* this frame is not the last */
-+	/*
++	/* TODO jumbo frame
 +	if ((ddesc->status & BIT(8)) == 0) {
 +		dev_warn(priv->dev, "Multi frame not implemented currlen=%d\n",
 +			 frame_len);
@@ -388,18 +438,24 @@ index 0000000..7db3afd
 +{
 +	struct sun8i_emac_priv *priv = netdev_priv(ndev);
 +	struct dma_desc *ddesc;
-+	int i;
 +
-+	for (i = 0; i < nbdesc; i++) {
-+		ddesc = priv->dd_rx + i;
-+		if (!(ddesc->status & BIT(31)))
-+			sun8i_emac_rx_from_ddesc(ndev, i);
-+	}
++	ddesc = priv->dd_rx + priv->rx_dirty;
++	while (!(ddesc->status & BIT(31))) {
++		sun8i_emac_rx_from_ddesc(ndev, priv->rx_dirty);
++		rb_inc(&priv->rx_dirty);
++		ddesc = priv->dd_rx + priv->rx_dirty;
++	};
 +	return 0;
 +}
 +
-+/* iterate over dma desc for finding completed xmit.
++/* iterate over dma_desc for finding completed xmit.
 + * Called from interrupt context, so no need to spinlock tx
++ *
++ * The problem is: how to know that a descriptor is sent and not just in
++ * preparation.
++ * Need to have status=0 and st set but this is the state of first frame just
++ * before setting the own-by-DMA bit.
++ * The solution is to used the artificial value DCLEAN.
 + */
 +static int sun8i_emac_complete_xmit(struct net_device *ndev)
 +{
@@ -410,11 +466,18 @@ index 0000000..7db3afd
 +	/*smp_rmb();*/
 +	do {
 +		ddesc = priv->dd_tx + priv->tx_dirty;
-+		if (ddesc->status & BIT(31))
++
++		if (ddesc->status & BIT(31)) {
++			dev_info(priv->dev, "BUG: DMA still set %d %d\n",
++				 priv->tx_dirty, priv->tx_slot);
++			return 0;
++		}
++
++		if (ddesc->status == DCLEAN)
 +			return 0;
 +
 +		if (ddesc->status == 0 && !ddesc->st) {
-+			dev_info(priv->dev, "dirty not set %d %d\n",
++			dev_info(priv->dev, "BUG: reached the void %d %d\n",
 +				 priv->tx_dirty, priv->tx_slot);
 +			return 0;
 +		}
@@ -459,11 +522,14 @@ index 0000000..7db3afd
 +		else
 +			dma_unmap_page(priv->dev, ddesc->buf_addr,
 +				       frame_len, DMA_TO_DEVICE);
-+		ddesc->status = 0;
++		ddesc->status = DCLEAN;
 +		ddesc->st = 0;
 +
 +		rb_inc(&priv->tx_dirty);
-+	} while (priv->tx_dirty != priv->tx_slot);
++		ddesc = priv->dd_tx + priv->tx_dirty;
++	} while (ddesc->st && !(ddesc->status & BIT(31)));
++	/*} while (priv->tx_dirty != priv->tx_slot);*/
++	/*smp_wmb();*/
 +
 +	if (netif_queue_stopped(ndev) &&
 +	    rb_tx_numfreedesc(ndev) > MAX_SKB_FRAGS + 1)
@@ -560,7 +626,7 @@ index 0000000..7db3afd
 +
 +	bus = devm_mdiobus_alloc(priv->dev);
 +	if (!bus) {
-+		netdev_err(ndev, "Failed to alloc new mdio bus\n");
++		netdev_err(ndev, "Failed to allocate new mdio bus\n");
 +		return -ENOMEM;
 +	}
 +
@@ -626,6 +692,7 @@ index 0000000..7db3afd
 +		priv->speed = 0;
 +		priv->duplex = -1;
 +	}
++
 +	if (new_state)
 +		phy_print_status(phydev);
 +
@@ -1012,7 +1079,7 @@ index 0000000..7db3afd
 +	memset(priv->dd_tx, 0, nbdesc * sizeof(struct dma_desc));
 +	ddesc = priv->dd_tx;
 +	for (i = 0; i < nbdesc; i++) {
-+		ddesc->status = 0;
++		ddesc->status = DCLEAN;
 +		ddesc->st = 0;
 +		ddesc->next = (u32)(priv->dd_tx_phy + (i + 1)
 +			* sizeof(struct dma_desc));
@@ -1027,23 +1094,22 @@ index 0000000..7db3afd
 +		phy_start(ndev->phydev);
 +
 +	writel(priv->dd_rx_phy, priv->base + SUN8I_EMAC_RX_DESC_LIST);
++	/* start RX DMA */
 +	v = readl(priv->base + SUN8I_EMAC_RX_CTL1);
 +	v |= BIT(30);
-+	/*v |= (1 << 31);*/
 +	writel(v, priv->base + SUN8I_EMAC_RX_CTL1);
 +
 +	writel(priv->dd_tx_phy, priv->base + SUN8I_EMAC_TX_DESC_LIST);
 +	v = readl(priv->base + SUN8I_EMAC_TX_CTL1);
 +	v |= BIT(30);
-+/*	v |= (1 << 31);*/
 +	writel(v, priv->base + SUN8I_EMAC_TX_CTL1);
 +
-+	/* activate TX */
++	/* activate transmitter */
 +	v = readl(priv->base + SUN8I_EMAC_TX_CTL0);
 +	v |= (1 << 31);
 +	writel(v, priv->base + SUN8I_EMAC_TX_CTL0);
 +
-+	/* activate RX */
++	/* activate receiver */
 +	v = readl(priv->base + SUN8I_EMAC_RX_CTL0);
 +	v |= (1 << 31);
 +	writel(v, priv->base + SUN8I_EMAC_RX_CTL0);
@@ -1094,6 +1160,7 @@ index 0000000..7db3afd
 +{
 +	struct sun8i_emac_priv *priv = netdev_priv(ndev);
 +	struct dma_desc *ddesc;
++	struct dma_desc *first;
 +	int i = 0, rbd_first;
 +	unsigned int len, fraglen;
 +	u32 v;
@@ -1113,9 +1180,12 @@ index 0000000..7db3afd
 +
 +	spin_lock(&priv->tx_lock);
 +
-+	/* check for contigous space */
-+	if (rb_tx_numfreedesc(ndev) < n + 1) {
-+		dev_err_ratelimited(priv->dev, "BUG!: TX is full\n");
++	/* check for contigous space
++	 * We need at least 1(skb->data) + n(numfrags) + 1(one clean slot)
++	 */
++	if (rb_tx_numfreedesc(ndev) < n + 2) {
++		dev_err_ratelimited(priv->dev, "BUG!: TX is full %d %d\n",
++				    priv->tx_dirty, priv->tx_slot);
 +		netif_stop_queue(ndev);
 +		spin_unlock(&priv->tx_lock);
 +		return NETDEV_TX_BUSY;
@@ -1123,6 +1193,7 @@ index 0000000..7db3afd
 +	i = priv->tx_slot;
 +
 +	ddesc = priv->dd_tx + i;
++	first = priv->dd_tx + i;
 +	ddesc->buf_addr = dma_map_single(priv->dev, skb->data, len,
 +					 DMA_TO_DEVICE);
 +	if (dma_mapping_error(priv->dev, ddesc->buf_addr)) {
@@ -1145,6 +1216,7 @@ index 0000000..7db3afd
 +		ddesc->st |= BIT(28);
 +	}
 +	rbd_first = i;
++	first = ddesc;
 +
 +	/* handle fragmented skb, one descriptor per fragment  */
 +	for (nf = 0; nf < n; nf++) {
@@ -1154,7 +1226,7 @@ index 0000000..7db3afd
 +		ddesc = priv->dd_tx + i;
 +		/* TODO remove that after work */
 +		if (ddesc->status & BIT(31) || ddesc->st)
-+			dev_err(priv->dev, "BUG: Already used\n");
++			dev_err(priv->dev, "BUG: Already used %d %x %x\n", i, ddesc->status, ddesc->st);
 +		fraglen = skb_frag_size(frag);
 +		ddesc->st = fraglen;
 +		priv->ndev->stats.tx_bytes += fraglen;
@@ -1186,7 +1258,6 @@ index 0000000..7db3afd
 +	ddesc->st |= BIT(29);
 +	ddesc->status = BIT(31);
 +	/*smp_wmb();*/
-+
 +	priv->tx_slot = i;
 +
 +	if (priv->tx_dma_start == 0) {
@@ -1209,11 +1280,11 @@ index 0000000..7db3afd
 +xmit_error:
 +	/* clean descritors from rbd_first to i */
 +	ddesc->st = 0;
-+	ddesc->status = 0;
++	ddesc->status = DCLEAN;
 +	do {
 +		ddesc = priv->dd_tx + rbd_first;
 +		ddesc->st = 0;
-+		ddesc->status = 0;
++		ddesc->status = DCLEAN;
 +		rb_inc(&rbd_first);
 +	} while (rbd_first != i);
 +	spin_unlock(&priv->tx_lock);
@@ -1316,6 +1387,14 @@ index 0000000..7db3afd
 +
 +	spin_lock(&priv->tx_lock);
 +
++	v = readl(priv->base + SUN8I_EMAC_TX_CUR_DESC);
++	dev_info(priv->dev, "SUN8I_EMAC_TX_CUR_DESC %x dirty=%d clean=%d\n",
++		 v, priv->tx_dirty, priv->tx_slot);
++	priv->tx_dirty = (v - priv->dd_tx_phy) / 16;
++	dev_info(priv->dev, "Setting dirty to %d\n", priv->tx_dirty);
++	v = readl(priv->base + SUN8I_EMAC_TX_DMA_STA);
++	dev_info(priv->dev, "SUN8I_EMAC_TX_DMA_STA %x\n", v);
++
 +	v = readl(priv->base + SUN8I_EMAC_TX_CTL0);
 +	v &= ~BIT(31);
 +	writel(v, priv->base + SUN8I_EMAC_TX_CTL0);
@@ -1328,11 +1407,21 @@ index 0000000..7db3afd
 +
 +	for (i = 0; i < nbdesc; i++) {
 +		ddesc = priv->dd_tx + i;
++		dev_info(priv->dev, "desc%02d %x %x %x:\n", i, ddesc->status,
++			 ddesc->st, priv->dd_tx_phy + i);
 +		if (priv->tx_sk[i] && (ddesc->st & BIT(30)))
-+			dev_kfree_skb(priv->tx_sk[i]);
++			dev_kfree_skb_any(priv->tx_sk[i]);
 +		ddesc->st = 0;
-+		ddesc->status = 0;
++		ddesc->status = DCLEAN;
 +	}
++	v = readl(priv->base + SUN8I_EMAC_TX_CTL0);
++	v |= BIT(31);
++	writel(v, priv->base + SUN8I_EMAC_TX_CTL0);
++
++	v = readl(priv->base + SUN8I_EMAC_TX_CTL1);
++	v |= BIT(31);
++	v |= BIT(30);
++	writel(v, priv->base + SUN8I_EMAC_TX_CTL1);
 +
 +	spin_unlock(&priv->tx_lock);
 +
@@ -1509,6 +1598,7 @@ index 0000000..7db3afd
 +	if (v & BIT(16))
 +		dev_info(priv->dev, "Unhandled interrupt RGMII\n");
 +
++	/* TODO the datasheet state those register as read-only */
 +	writel(v & 0x3FFF, priv->base + SUN8I_EMAC_INT_STA);
 +
 +	return IRQ_HANDLED;
@@ -1570,6 +1660,7 @@ index 0000000..7db3afd
 +
 +	priv->tx_slot = 0;
 +	priv->tx_dirty = 0;
++	priv->rx_dirty = 0;
 +
 +	ndev->netdev_ops = &sun8i_emac_netdev_ops;
 +	ndev->ethtool_ops = &sun8i_emac_ethtool_ops;

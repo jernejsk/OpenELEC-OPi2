@@ -23,9 +23,9 @@ index dadb7f6..a13d2e6 100644
  
 +			emac_rgmii_pins: emac0@0 {
 +				allwinner,pins = "PD0", "PD1", "PD2", "PD3",
-+						"PD4", "PD5", "PD6", "PD7",
-+						"PD8", "PD9", "PD10", "PD11",
-+						"PD12", "PD13", "PD14", "PD15",
++						"PD4", "PD5", "PD7",
++						"PD8", "PD9", "PD10",
++						"PD12", "PD13", "PD15",
 +						"PD16", "PD17";
 +				allwinner,function = "emac";
 +				allwinner,drive = <SUN4I_PINCTRL_40_MA>;
@@ -41,7 +41,7 @@ index dadb7f6..a13d2e6 100644
  
 +		emac: ethernet@1c30000 {
 +			compatible = "allwinner,sun8i-h3-emac";
-+			reg = <0x01c30000 0x1054>;
++			reg = <0x01c30000 0x104>;
 +			interrupts = <GIC_SPI 82 IRQ_TYPE_LEVEL_HIGH>;
 +			resets = <&ahb_rst 17>, <&ahb_rst 66>;
 +			reset-names = "ahb", "ephy";
